@@ -1,0 +1,129 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+library(readr)
+library(corrplot)
+library(corrgram)
+library(stats)
+cbb <- read_csv("cbb.csv")
+head(cbb)
+attach(cbb)
+```
+
+```{r}
+summary(cbb)
+colSums(is.na(cbb))
+```
+
+```{r}
+cbb$POSTSEASON <- ifelse(is.na(cbb$POSTSEASON), "Eliminated", cbb$POSTSEASON)
+cbb$SEED <- ifelse(is.na(cbb$SEED), 0, cbb$SEED)
+colSums(is.na(cbb))
+```
+
+```{r}
+cbb$YEAR<-as.factor(cbb$YEAR)
+```
+
+
+
+```{r}
+par(cex.axis=0.5)
+boxplot(ADJOE~POSTSEASON, data=cbb, boxwex=0.25, col="orange")
+boxplot(ADJDE~POSTSEASON, data=cbb, boxwex=0.25, col="orange")
+```
+```{r}
+str(cbb)
+```
+
+```{r}
+offcbb<-cbb[,c(5, 6, 8, 10, 12, 14, 16, 18)]
+defcbb<-cbb[,c(6, 5, 9, 11, 13, 15, 17, 19)]
+corrgram(offcbb,upper.panel = panel.cor)
+corrgram(defcbb,upper.panel = panel.cor)
+```
+```{r}
+par(mfrow = c(1, 2))
+reg1<-lm(ADJOE~EFG_O, data=offcbb)
+plot(x=EFG_O, y=ADJOE, main = "Adjusted Offesnsive Efficiency and Effective Field Goal% Shot" )
+abline(reg1)
+reg2<-lm(ADJDE~EFG_D, data=defcbb)
+plot(x=EFG_D, y=ADJDE, main = "Adjusted Defensive Efficiency and Effective Field Goal% Allowed" )
+abline(reg2)
+```
+```{r}
+par(cex.axis=0.5)
+boxplot(TOR~POSTSEASON, data=cbb, boxwex=0.25, col="orange")
+
+```
+
+
+```{r}
+library(dplyr)
+newcbb<-cbb[,-c(1, 2, 24)]
+head(newcbb)
+```
+
+```{r}
+#Divide our data into training and test data
+y<-(newcbb$POSTSEASON)
+set.seed(1)
+train<-sample(1:nrow(newcbb), nrow(newcbb)*4/5) 
+train_data<-newcbb[train,]
+test_data<-newcbb[-train,]
+y.train<-y[train]
+y.test<-y[-train]
+```
+
+```{r}
+str(y)
+```
+
+```{r}
+contrasts(y)
+```
+
+
+#Naive Bayes
+```{r}
+library (e1071)
+nb.fit <- naiveBayes(y~., data=newcbb, subset=train)
+nb.class <- predict (nb.fit , test_data)
+table (nb.class , y.test)
+mean (nb.class != y.test)
+```
+#KNN
+```{r}
+library(caret)
+k_values <- 1:50
+cv_control <- trainControl(method = "cv", number = 10)
+knn_models <- lapply(k_values, function(k) {
+  knn_model <- train(x = X, y = y, method = "knn", tuneGrid = data.frame(k = k), trControl = cv_control)
+  return(knn_model)
+})
+
+```
+```{r}
+accuracies <- sapply(knn_models, function(model) {
+  return(model$results[1,"Accuracy"])
+})
+
+plot(k_values, accuracies, type = "b", xlab = "k", ylab = "Accuracy")
+
+optimal_k <- k_values[which.max(accuracies)]
+print(paste0("Optimal k: ", optimal_k))
+
+```
+```{r}
+library(class)
+knn.pred<-knn(train_data[,-20],test_data[,-20],y.train, k = optimal_k)
+table (knn.pred , y.test)
+mean (knn.pred != y.test)
+```
+
+
+
